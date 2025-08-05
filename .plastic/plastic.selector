@@ -1,0 +1,4 @@
+repository "Cierdyn Vo 2025-08-04_09-30-58/Cierdyn Vo@2475827540753@cloud"
+  path "/"
+    br "/main"
+    co "/main"
