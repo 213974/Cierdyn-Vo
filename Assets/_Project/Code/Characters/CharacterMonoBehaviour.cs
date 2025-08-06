@@ -1,12 +1,15 @@
 using UnityEngine;
 
-// We now require a CharacterController for robust, physics-based movement.
 [RequireComponent(typeof(CharacterController))]
 public class CharacterMonoBehaviour : MonoBehaviour
 {
+    [Header("Settings")]
+    [SerializeField] private float moveSpeed = 5f;
+    [SerializeField] private float rotationSpeed = 10f;
+    [SerializeField] private float followDistance = 3f;
+
     private CharacterController controller;
     private Vector3 moveInput;
-    private Transform followTarget;
     private bool isActive;
 
     public CharacterId CharacterId { get; private set; }
@@ -16,27 +19,41 @@ public class CharacterMonoBehaviour : MonoBehaviour
         controller = GetComponent<CharacterController>();
     }
 
+    void Update()
+    {
+        // All movement logic is now self-contained in the character's update.
+        if (isActive)
+        {
+            HandleActiveMovement();
+        }
+    }
+
     public void Initialize(CharacterStateData data)
     {
         this.CharacterId = data.id;
-        this.transform.position = data.position;
-        this.gameObject.name = data.id.ToString();
+        transform.position = data.position;
+        gameObject.name = data.id.ToString();
     }
 
-    // --- State Control ---
     public void SetAsActive() => isActive = true;
     public void SetAsFollower() => isActive = false;
 
-    // --- Movement Logic ---
     public void SetMoveInput(Vector3 input)
     {
         moveInput = input;
     }
 
-    public void UpdateMovement()
+    private void HandleActiveMovement()
     {
-        if (!isActive) return;
-        controller.Move(moveInput * 5f * Time.deltaTime); // 5f is a placeholder for moveSpeed
+        // Apply movement
+        controller.Move(moveInput * moveSpeed * Time.deltaTime);
+
+        // Apply rotation to face movement direction
+        if (moveInput.sqrMagnitude > 0.01f)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(moveInput);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+        }
     }
 
     public void Follow(Transform target)
@@ -44,11 +61,14 @@ public class CharacterMonoBehaviour : MonoBehaviour
         if (isActive) return;
 
         float distance = Vector3.Distance(transform.position, target.position);
-        // Only start following if we are a certain distance away.
-        if (distance > 3f)
+        if (distance > followDistance)
         {
             Vector3 direction = (target.position - transform.position).normalized;
-            controller.Move(direction * 4f * Time.deltaTime); // Follow at a slightly slower speed
+            controller.Move(direction * (moveSpeed * 0.8f) * Time.deltaTime); // Follow at 80% speed
+
+            // Also rotate to look at the leader
+            Quaternion targetRotation = Quaternion.LookRotation(direction);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
         }
     }
 }

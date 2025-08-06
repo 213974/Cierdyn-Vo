@@ -1,55 +1,82 @@
 ﻿using UnityEngine;
-using UnityEngine.InputSystem; // Required for the new Input System
+using UnityEngine.InputSystem;
 
 public class PlayerController : MonoBehaviour
 {
-    [Header("Camera")]
-    [SerializeField] private Cinemachine.CinemachineVirtualCamera virtualCamera;
+    [Header("References")]
+    [SerializeField] private CameraController mainCameraController;
 
     private CharacterMonoBehaviour activeCharacter;
     private CharacterMonoBehaviour followerCharacter;
+    private PlayerInputActions playerActions;
 
-    // This is where the GameManager will give us our spawned characters.
+    void Awake()
+    {
+        playerActions = new PlayerInputActions();
+    }
+
+    private void OnEnable()
+    {
+        playerActions.Player.Move.performed += OnMove;
+        playerActions.Player.Move.canceled += OnMove;
+        playerActions.Player.SwitchCharacter.performed += OnSwitchCharacter;
+        playerActions.Player.Enable();
+    }
+
+    private void OnDisable()
+    {
+        playerActions.Player.Move.performed -= OnMove;
+        playerActions.Player.Move.canceled -= OnMove;
+        playerActions.Player.SwitchCharacter.performed -= OnSwitchCharacter;
+        playerActions.Player.Disable();
+    }
+
+    // Start is called before the first frame update
+    void Start()
+    {
+        // Lock the mouse by default when the game starts.
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+    }
+
     public void PossessSquad(CharacterMonoBehaviour cierdyn, CharacterMonoBehaviour elara, CharacterId activeId)
     {
-        if (activeId == CharacterId.Cierdyn)
-        {
-            SetActiveCharacter(cierdyn, elara);
-        }
-        else
-        {
-            SetActiveCharacter(elara, cierdyn);
-        }
+        if (activeId == CharacterId.Cierdyn) SetActiveCharacter(cierdyn, elara);
+        else SetActiveCharacter(elara, cierdyn);
     }
 
-    // Input System Actions - these will be called by the Player Input component.
-    public void OnMove(InputAction.CallbackContext context)
+    private void OnMove(InputAction.CallbackContext context)
     {
+        Vector2 moveInput = context.ReadValue<Vector2>();
+
+        // Don't process movement if the cursor is unlocked (for future UI states)
+        if (Cursor.lockState != CursorLockMode.Locked)
+        {
+            activeCharacter?.SetMoveInput(Vector3.zero);
+            return;
+        }
+
         if (activeCharacter != null)
         {
-            Vector2 moveInput = context.ReadValue<Vector2>();
-            activeCharacter.SetMoveInput(new Vector3(moveInput.x, 0, moveInput.y));
+            Vector3 cameraForward = Camera.main.transform.forward;
+            Vector3 cameraRight = Camera.main.transform.right;
+            cameraForward.y = 0;
+            cameraRight.y = 0;
+            cameraForward.Normalize();
+            cameraRight.Normalize();
+
+            Vector3 moveDirection = cameraForward * moveInput.y + cameraRight * moveInput.x;
+            activeCharacter.SetMoveInput(moveDirection);
         }
     }
 
-    public void OnSwitchCharacter(InputAction.CallbackContext context)
+    private void OnSwitchCharacter(InputAction.CallbackContext context)
     {
-        if (context.performed) // Only trigger on the button press
-        {
-            // The active character becomes the follower, and vice-versa.
-            SetActiveCharacter(followerCharacter, activeCharacter);
-        }
+        SetActiveCharacter(followerCharacter, activeCharacter);
     }
 
     void Update()
     {
-        // Every frame, tell the active character to move itself.
-        if (activeCharacter != null)
-        {
-            activeCharacter.UpdateMovement();
-        }
-
-        // And tell the follower to follow the active character.
         if (followerCharacter != null && activeCharacter != null)
         {
             followerCharacter.Follow(activeCharacter.transform);
@@ -64,11 +91,9 @@ public class PlayerController : MonoBehaviour
         activeCharacter.SetAsActive();
         followerCharacter.SetAsFollower();
 
-        // Tell the camera to follow the new active character
-        if (virtualCamera != null)
+        if (mainCameraController != null)
         {
-            virtualCamera.Follow = activeCharacter.transform;
-            virtualCamera.LookAt = activeCharacter.transform;
+            mainCameraController.SetTarget(activeCharacter.transform);
         }
     }
 }
